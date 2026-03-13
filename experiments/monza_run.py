@@ -67,12 +67,20 @@ def run():
 
     results = sim.run_lap()
 
+    # Ensure all arrays are the same length
+    n = min(
+        len(results["time_history"]),
+        len(results["power_history"]),
+        len(results["soc_history"]),
+        len(results["pos_history"])
+)
+
     df = pd.DataFrame({
-        "time": results["time_history"],
-        "power": results["power_history"],
-        "soc": results["soc_history"][:len(results["time_history"])],
-        "distance": results["pos_history"]
-    })
+        "time": results["time_history"][:n],
+        "power": results["power_history"][:n],
+        "soc": results["soc_history"][:n],
+        "distance": results["pos_history"][:n]
+})
 
     df.to_csv("results/monza_telemetry.csv", index=False)
 
