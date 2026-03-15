@@ -1,3 +1,4 @@
+# sim/sim_runner.py
 from typing import Dict, List
 from sim.track import Track
 from sim.vehicle import Vehicle
@@ -29,6 +30,10 @@ class SimulationRunner:
 
         self.battery.reset_history()
 
+        # Bug fix 2: reset AggressiveController budget at the start of each lap
+        if hasattr(self.controller, "start_lap"):
+            self.controller.start_lap()
+
         total_time = 0.0
 
         power_history: List[float] = []
@@ -49,11 +54,12 @@ class SimulationRunner:
 
             # braking energy recovery
             if seg.v_entry > seg.v_exit:
-
                 e_brake = self.vehicle.braking_energy_j(seg.v_entry, seg.v_exit)
                 e_rec = self.regen_efficiency * e_brake
-
                 self.battery.add_energy(e_rec)
+
+            # Bug fix 1: pass upcoming segments so LookaheadController can use them
+            upcoming = self.track.segments[seg_idx + 1:]
 
             for step in range(n_steps):
 
@@ -61,23 +67,23 @@ class SimulationRunner:
 
                 current_v = max(
                     0.1,
-                    (1 - frac) * seg.v_entry + frac * seg.v_exit
+                    (1 - frac) * seg.v_entry + frac * seg.v_exit,
                 )
 
                 state = {
                     "soc": self.battery.soc,
-                    "v": current_v
+                    "v": current_v,
+                    "seg_type": seg.seg_type,
+                    "seg_name": seg.name,
                 }
 
-                power = self.controller.decide_power(state, step_dt)
+                power = self.controller.decide_power(state, step_dt, upcoming)
 
                 power = max(0.0, min(power, MGUK_POWER_LIMIT_W))
 
                 energy_request = power * step_dt
-
                 self.battery.deploy_energy(energy_request)
 
-                # telemetry
                 time_history.append(total_time + step * step_dt)
                 power_history.append(power)
                 pos_history.append(position_m + frac * seg.length_m)
@@ -88,15 +94,11 @@ class SimulationRunner:
             position_m += seg.length_m
 
         results = {
-
             "lap_time_s": total_time,
-
             "soc_end": self.battery.soc,
-
             "harvested_j": self.battery.total_harvested,
             "deployed_j": self.battery.total_deployed,
             "wasted_j": self.battery.total_wasted,
-
             "soc_history": soc_history,
             "power_history": power_history,
             "time_history": time_history,
