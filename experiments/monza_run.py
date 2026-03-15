@@ -1,5 +1,3 @@
-# experiments/monza_run.py
-
 import pandas as pd
 
 from sim.track import Segment, Track
@@ -15,38 +13,28 @@ def build_monza():
 
     segments = [
 
-        # start / pit straight
         Segment("Main Straight", "straight", 900, kmh_to_mps(200), kmh_to_mps(340)),
 
-        # T1 braking
         Segment("T1 Brake", "brake", 150, kmh_to_mps(340), kmh_to_mps(90)),
 
         Segment("T1 Corner", "corner", 120, kmh_to_mps(90), kmh_to_mps(110)),
 
-        # Curva Grande
         Segment("Curva Grande", "corner", 700, kmh_to_mps(280), kmh_to_mps(300)),
 
-        # T4 braking
         Segment("Roggia Brake", "brake", 150, kmh_to_mps(330), kmh_to_mps(100)),
 
         Segment("Roggia Corner", "corner", 150, kmh_to_mps(100), kmh_to_mps(140)),
 
-        # Lesmo 1
         Segment("Lesmo 1", "corner", 200, kmh_to_mps(150), kmh_to_mps(180)),
 
-        # Lesmo 2
         Segment("Lesmo 2", "corner", 250, kmh_to_mps(160), kmh_to_mps(200)),
 
-        # Serraglio straight
         Segment("Serraglio", "straight", 800, kmh_to_mps(200), kmh_to_mps(330)),
 
-        # Ascari
         Segment("Ascari", "corner", 350, kmh_to_mps(150), kmh_to_mps(220)),
 
-        # Back straight
         Segment("Back Straight", "straight", 900, kmh_to_mps(220), kmh_to_mps(340)),
 
-        # Parabolica
         Segment("Parabolica", "corner", 500, kmh_to_mps(180), kmh_to_mps(240)),
     ]
 
@@ -67,20 +55,21 @@ def run():
 
     results = sim.run_lap()
 
-    # Ensure all arrays are the same length
     n = min(
         len(results["time_history"]),
         len(results["power_history"]),
         len(results["soc_history"]),
-        len(results["pos_history"])
-)
+        len(results["pos_history"]),
+        len(results["speed_history"]),
+    )
 
     df = pd.DataFrame({
         "time": results["time_history"][:n],
         "power": results["power_history"][:n],
         "soc": results["soc_history"][:n],
-        "distance": results["pos_history"][:n]
-})
+        "distance": results["pos_history"][:n],
+        "speed": results["speed_history"][:n],
+    })
 
     df.to_csv("results/monza_telemetry.csv", index=False)
 
