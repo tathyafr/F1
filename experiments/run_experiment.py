@@ -68,7 +68,7 @@ def run():
                 "segment_name": result["seg_name_history"][:n],
                 "segment_type": result["seg_type_history"][:n],
             })
-            df["cumulative_energy_deployed_j"] = df["power"].cumsum() * 0.2  # dt=0.2s
+            tel_df["cumulative_energy_deployed_j"] = tel_df["power"].cumsum() * 0.2
             fname = f"results/telemetry_{strategy}_soc{int(soc*10)}.csv"
             tel_df.to_csv(fname, index=False)
 
