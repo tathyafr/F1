@@ -114,11 +114,11 @@ class SimulationRunner:
 
         return results
 
-def run_laps(self, n_laps: int = 3) -> list:
-    """Run multiple laps, carrying battery state across laps."""
-    all_results = []
-    for lap in range(n_laps):
-        result = self.run_lap()
-        result["lap_number"] = lap + 1
-        all_results.append(result)
-    return all_results
+    def run_laps(self, n_laps: int = 3) -> list:
+        """Run multiple laps, carrying battery state across laps."""
+        all_results = []
+        for lap in range(n_laps):
+            result = self.run_lap()
+            result["lap_number"] = lap + 1
+            all_results.append(result)
+        return all_results
