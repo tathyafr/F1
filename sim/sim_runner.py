@@ -41,6 +41,8 @@ class SimulationRunner:
         pos_history: List[float] = []
         soc_history: List[float] = []
         speed_history: List[float] = []
+        seg_name_history: List[str] = []
+        seg_type_history: List[str] = []
 
         position_m = 0.0
 
@@ -89,6 +91,8 @@ class SimulationRunner:
                 pos_history.append(position_m + frac * seg.length_m)
                 soc_history.append(self.battery.soc)
                 speed_history.append(current_v)
+                seg_name_history.append(seg.name)
+                seg_type_history.append(seg.seg_type)
 
             total_time += seg_time
             position_m += seg.length_m
@@ -104,6 +108,17 @@ class SimulationRunner:
             "time_history": time_history,
             "pos_history": pos_history,
             "speed_history": speed_history,
+            "seg_name_history": seg_name_history,
+            "seg_type_history": seg_type_history,
         }
 
         return results
+
+def run_laps(self, n_laps: int = 3) -> list:
+    """Run multiple laps, carrying battery state across laps."""
+    all_results = []
+    for lap in range(n_laps):
+        result = self.run_lap()
+        result["lap_number"] = lap + 1
+        all_results.append(result)
+    return all_results

@@ -28,13 +28,15 @@ def run():
     )
 
     df = pd.DataFrame({
-        "time":     results["time_history"][:n],
-        "power":    results["power_history"][:n],
-        "soc":      results["soc_history"][:n],
-        "distance": results["pos_history"][:n],
-        "speed":    results["speed_history"][:n],
+    "time":         results["time_history"][:n],
+    "power":        results["power_history"][:n],
+    "soc":          results["soc_history"][:n],
+    "distance":     results["pos_history"][:n],
+    "speed":        results["speed_history"][:n],
+    "segment_name": results["seg_name_history"][:n],
+    "segment_type": results["seg_type_history"][:n],
     })
-
+    df["cumulative_energy_deployed_j"] = df["power"].cumsum() * 0.2  # dt=0.2s
     df.to_csv("results/monza_telemetry.csv", index=False)
     print("Lap time:", results["lap_time_s"])
 
