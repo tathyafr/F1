@@ -1,14 +1,21 @@
 # F1 Hybrid Energy Management Simulator
 
-Notebook-first research prototype for Formula 1 MGU-K energy management at Circuit Gilles Villeneuve.
+Physics-based simulation of Formula 1 MGU-K hybrid energy management at Monza (Circuit di Monza).
 
 ## Run
-Open and execute:
-- `f1_hybrid_energy_management_simulator.ipynb`
+
+Open and execute the analysis notebook:
+- `analysis/F1_analysis.ipynb`
+
+Or run experiments directly:
+- `python -m experiments.monza_run` — single lap, conservative strategy, saves telemetry
+- `python -m experiments.run_experiment` — all strategies × SOC values, saves comparison CSV
 
 ## Current implementation status
-- Strategy-aware segmented track model (deployment/regen/overtake priorities).
-- Track consistency validation.
-- Physics-based discrete-time lap simulation (baseline ERS OFF vs ERS ON).
-- FIA deployment constraints (120 kW, 4 MJ/lap) enforced in controller/simulation.
-- SOC, deployment/regen power, and speed visualizations.
+- Segmented Monza track model (12 segments: straights, braking zones, corners)
+- Physics-based discrete-time lap simulation
+- Three ERS deployment strategies: Conservative, Aggressive, Lookahead
+- FIA deployment constraints (120 kW MGU-K limit) enforced
+- Battery SOC tracking with regen efficiency model
+- Telemetry output: time, distance, speed, power, SOC
+- Strategy comparison experiment runner

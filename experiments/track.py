@@ -1,16 +1,18 @@
 # experiments/tracks.py
 """
-Shared track definitions used by all experiment scripts.
-Add new tracks here and import them wherever needed.
+Shared track definitions used across experiment scripts.
+Add new tracks here as the project grows.
 """
+
 from sim.track import Segment, Track
 from utils.units import kmh_to_mps
 
 
 def build_monza() -> Track:
     """
-    Simplified Monza circuit (12 segments).
-    Speeds converted from km/h to m/s.
+    Simplified Monza (Circuit di Monza) track model.
+    12 segments covering the main circuit features.
+    All speeds in m/s (converted from km/h).
     """
     segments = [
         Segment("Main Straight",  "straight", 900,  kmh_to_mps(200), kmh_to_mps(340)),
