@@ -52,7 +52,8 @@ def test_braking_energy_zero_when_accelerating():
 
 def test_time_saved_positive():
     v = Vehicle(798.0)
-    saved = v.estimate_time_saved_by_energy(500_000, 50.0, 500.0)
+    # Use 2 MJ at 50 m/s over 500 m; drag consumes ~536 kJ so net energy is positive
+    saved = v.estimate_time_saved_by_energy(2_000_000, 50.0, 500.0)
     assert saved > 0
 
 def test_time_saved_zero_no_energy():
@@ -138,3 +139,49 @@ def test_regen_harvests_energy(simple_track):
                            ConservativeController())
     r = sim.run_lap()
     assert r["harvested_j"] > 0
+
+
+# ── Lap Time Integration ──────────────────────────────────────────────────────
+
+def test_lap_time_improvement_key_present(simple_track):
+    sim = SimulationRunner(simple_track, Vehicle(VEHICLE_MASS_KG),
+                           Battery(BATTERY_CAPACITY_J, soc=0.6),
+                           AggressiveController(energy_budget_j=4e6))
+    r = sim.run_lap()
+    assert "lap_time_improvement_s" in r
+
+def test_strategies_produce_different_lap_times():
+    from experiments.tracks import build_monza
+    track = build_monza()
+    # Conservative with threshold=0.99 effectively deploys nothing (SOC never reaches 0.99 on a lap);
+    # aggressive deploys 2 MJ unconditionally — aggressive must produce a faster lap
+    conservative = SimulationRunner(
+        track, Vehicle(VEHICLE_MASS_KG),
+        Battery(BATTERY_CAPACITY_J, soc=0.6),
+        ConservativeController(soc_threshold=0.99),
+    )
+    aggressive = SimulationRunner(
+        track, Vehicle(VEHICLE_MASS_KG),
+        Battery(BATTERY_CAPACITY_J, soc=0.6),
+        AggressiveController(energy_budget_j=2e6),
+    )
+    t_cons = conservative.run_lap()["lap_time_s"]
+    t_agg = aggressive.run_lap()["lap_time_s"]
+    assert t_agg < t_cons, "Aggressive deploys 2 MJ while conservative deploys nothing — must be faster"
+
+def test_more_energy_means_faster_lap():
+    from experiments.tracks import build_monza
+    track = build_monza()
+    low_bat = SimulationRunner(
+        track, Vehicle(VEHICLE_MASS_KG),
+        Battery(BATTERY_CAPACITY_J, soc=0.2),
+        AggressiveController(energy_budget_j=4e6),
+    )
+    high_bat = SimulationRunner(
+        track, Vehicle(VEHICLE_MASS_KG),
+        Battery(BATTERY_CAPACITY_J, soc=0.9),
+        AggressiveController(energy_budget_j=4e6),
+    )
+    t_low = low_bat.run_lap()["lap_time_s"]
+    t_high = high_bat.run_lap()["lap_time_s"]
+    assert t_high <= t_low, "Higher SOC gives more deployable energy, so equal or faster lap"

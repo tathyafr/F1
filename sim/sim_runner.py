@@ -4,7 +4,7 @@ from sim.track import Track
 from sim.vehicle import Vehicle
 from sim.battery import Battery
 from sim.controller import Controller
-from sim.config import DEFAULT_DT, DEFAULT_REGEN_EFFICIENCY, MGUK_POWER_LIMIT_W
+from sim.config import DEFAULT_DT, DEFAULT_REGEN_EFFICIENCY, MGUK_POWER_LIMIT_W, ENERGY_TO_TIME_COEFF
 import math
 
 
@@ -34,6 +34,7 @@ class SimulationRunner:
         if hasattr(self.controller, "start_lap"):
             self.controller.start_lap()
 
+        baseline_time = self.track.lap_base_time()
         total_time = 0.0
 
         power_history: List[float] = []
@@ -63,6 +64,8 @@ class SimulationRunner:
             # Bug fix 1: pass upcoming segments so LookaheadController can use them
             upcoming = self.track.segments[seg_idx + 1:]
 
+            seg_deployed_j = 0.0
+
             for step in range(n_steps):
 
                 frac = (step + 0.5) / n_steps
@@ -84,7 +87,8 @@ class SimulationRunner:
                 power = max(0.0, min(power, MGUK_POWER_LIMIT_W))
 
                 energy_request = power * step_dt
-                self.battery.deploy_energy(energy_request)
+                actual_deployed = self.battery.deploy_energy(energy_request)
+                seg_deployed_j += actual_deployed
 
                 time_history.append(total_time + step * step_dt)
                 power_history.append(power)
@@ -94,11 +98,21 @@ class SimulationRunner:
                 seg_name_history.append(seg.name)
                 seg_type_history.append(seg.seg_type)
 
-            total_time += seg_time
+            # Convert deployed energy to lap time savings.
+            # Uses a calibrated linear coefficient (ENERGY_TO_TIME_COEFF = 1e-7 s/J),
+            # equivalent to ~0.1 s per MJ, matching real F1 ERS benefit at Monza (~0.4s / 4 MJ).
+            # Applied only on straights: corners are lateral-grip-limited, not power-limited.
+            if seg.seg_type == "straight":
+                time_saved = seg_deployed_j * ENERGY_TO_TIME_COEFF
+            else:
+                time_saved = 0.0
+            effective_seg_time = max(seg_time - time_saved, seg.length_m / 100.0)  # 100 m/s ~360 km/h physical cap
+            total_time += effective_seg_time
             position_m += seg.length_m
 
         results = {
             "lap_time_s": total_time,
+            "lap_time_improvement_s": baseline_time - total_time,
             "soc_end": self.battery.soc,
             "harvested_j": self.battery.total_harvested,
             "deployed_j": self.battery.total_deployed,

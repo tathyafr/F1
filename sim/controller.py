@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 from sim.config import MGUK_POWER_LIMIT_W, ENERGY_TO_TIME_COEFF
 from sim.vehicle import Vehicle
 from sim.track import Segment
+from sim.battery import Battery
 import math
 
 
@@ -99,3 +100,117 @@ class LookaheadController(Controller):
         if score > threshold and soc > 0.12:
             return self.power_limit_w
         return 0.0
+
+
+class OptimalController(Controller):
+    """
+    Offline optimal ERS deployment schedule computed via scipy.optimize (SLSQP).
+
+    Models the real-world approach: a pre-race optimized deployment map is
+    uploaded to the car's ERS control unit and executed deterministically.
+
+    Decision variables: x[i] = fraction of MGUK_POWER_LIMIT_W to deploy on segment i.
+    Objective: minimize total lap time.
+    Constraint: SOC at end of lap >= SOC_MIN (do not arrive drained).
+
+    The schedule is computed once at construction. During decide_power(), the
+    controller returns the pre-computed power for the current segment index.
+    """
+
+    def __init__(
+        self,
+        vehicle: Vehicle,
+        track,
+        battery: Battery,
+        regen_efficiency: float = 0.6,
+        dt: float = 0.2,
+    ):
+        from sim.config import SOC_MIN
+        self._SOC_MIN = SOC_MIN
+        self._seg_index = 0
+        self._current_seg_name = None
+        self._schedule = self._optimize(vehicle, track, battery, regen_efficiency, dt)
+
+    def _simulate_lap_fast(self, x, vehicle, track, battery_init_soc, battery_capacity_j,
+                           regen_efficiency, dt):
+        """Lightweight simulation used by the optimizer (no history tracking)."""
+        import math
+        from sim.config import SOC_MIN, SOC_MAX, MGUK_POWER_LIMIT_W
+
+        soc = battery_init_soc
+        total_time = 0.0
+
+        for i, seg in enumerate(track.segments):
+            avg_v = max(0.1, 0.5 * (seg.v_entry + seg.v_exit))
+            seg_time = seg.length_m / avg_v
+            n_steps = max(1, int(math.ceil(seg_time / dt)))
+            step_dt = seg_time / n_steps
+
+            # regen
+            if seg.v_entry > seg.v_exit:
+                e_brake = 0.5 * vehicle.mass * (seg.v_entry ** 2 - seg.v_exit ** 2)
+                e_rec = regen_efficiency * e_brake
+                available_cap = (SOC_MAX - soc) * battery_capacity_j
+                accepted = min(e_rec, available_cap)
+                soc += accepted / battery_capacity_j
+
+            # deployment
+            power = x[i] * MGUK_POWER_LIMIT_W
+            energy_request = power * seg_time
+            available_j = max(0.0, (soc - SOC_MIN) * battery_capacity_j)
+            deployed = min(energy_request, available_j)
+            soc -= deployed / battery_capacity_j
+            soc = max(SOC_MIN, min(SOC_MAX, soc))
+
+            # time savings: calibrated linear model, straights only (mirrors sim_runner logic)
+            if seg.seg_type == "straight":
+                time_saved = deployed * ENERGY_TO_TIME_COEFF
+            else:
+                time_saved = 0.0
+            effective_time = max(seg_time - time_saved, seg.length_m / 100.0)
+            total_time += effective_time
+
+        return total_time, soc
+
+    def _optimize(self, vehicle, track, battery, regen_efficiency, dt):
+        import numpy as np
+        from scipy.optimize import minimize
+        from sim.config import SOC_MIN
+
+        n = track.num_segments()
+        x0 = np.ones(n) * 0.5
+
+        def objective(x):
+            t, _ = self._simulate_lap_fast(
+                x, vehicle, track, battery.soc, battery.capacity_j, regen_efficiency, dt
+            )
+            return t
+
+        def soc_constraint(x):
+            _, soc_end = self._simulate_lap_fast(
+                x, vehicle, track, battery.soc, battery.capacity_j, regen_efficiency, dt
+            )
+            return soc_end - SOC_MIN
+
+        result = minimize(
+            objective,
+            x0,
+            method="SLSQP",
+            bounds=[(0.0, 1.0)] * n,
+            constraints={"type": "ineq", "fun": soc_constraint},
+            options={"maxiter": 300, "ftol": 1e-7},
+        )
+        return result.x.tolist()
+
+    def start_lap(self):
+        self._seg_index = 0
+        self._current_seg_name = None
+
+    def decide_power(self, state: Dict, dt: float, upcoming: Optional[List[Segment]] = None) -> float:
+        seg_name = state.get("seg_name", "")
+        if seg_name != self._current_seg_name:
+            if self._current_seg_name is not None:
+                self._seg_index = min(self._seg_index + 1, len(self._schedule) - 1)
+            self._current_seg_name = seg_name
+        fraction = self._schedule[self._seg_index]
+        return fraction * MGUK_POWER_LIMIT_W

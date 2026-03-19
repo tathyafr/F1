@@ -27,4 +27,4 @@ DEFAULT_DT: Final[float] = 0.2  # seconds; time-step used inside segments by run
 # ---------- lap time model ----------
 # This converts a deployed energy (J) into a first-order speed/time benefit.
 # This is a tunable constant used by lookahead controller; see docs for caveats.
-ENERGY_TO_TIME_COEFF: Final[float] = 1e-6  # rough scaling (s per J) — use sensitivity tests
+ENERGY_TO_TIME_COEFF: Final[float] = 1e-7  # calibrated: ~0.1 s per MJ (0.4 s / 4 MJ typical F1 Monza ERS benefit)
