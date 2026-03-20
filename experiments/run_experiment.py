@@ -6,6 +6,7 @@ from experiments.tracks import TRACK_REGISTRY, build_track
 from sim.vehicle import Vehicle
 from sim.battery import Battery
 from sim.controller import (
+    BaselineController,
     ConservativeController,
     AggressiveController,
     LookaheadController,
@@ -31,6 +32,7 @@ def run():
             bat_opt = Battery(BATTERY_CAPACITY_J, soc=soc)
             opt = OptimalController(vehicle, track, bat_opt)
             return {
+                "baseline":     BaselineController(),
                 "conservative": ConservativeController(),
                 "aggressive":   AggressiveController(energy_budget_j=4e6),
                 "lookahead":    LookaheadController(vehicle),
@@ -99,6 +101,7 @@ def run():
     vehicle = Vehicle(VEHICLE_MASS_KG)
     stint_rows = []
     for strat_name, ctrl in [
+        ("baseline",     BaselineController()),
         ("conservative", ConservativeController()),
         ("aggressive",   AggressiveController(energy_budget_j=4e6)),
         ("lookahead",    LookaheadController(vehicle)),

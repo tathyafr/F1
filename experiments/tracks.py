@@ -65,26 +65,28 @@ def build_spa() -> Track:
 def build_monaco() -> Track:
     """
     Simplified Monaco street circuit track model.
-    16 segments. Low average speed (~130 km/h), heavy braking events,
+    16 segments. Low average speed (~155 km/h), heavy braking events,
     short tunnel straight. High regen opportunity but limited deployment windows.
+    Segment speeds calibrated to match race-pace baseline of ~76.5 s
+    (real 2023 race pace ~75–77 s; model error <2%).
     All speeds in m/s (converted from km/h).
     """
     segments = [
         Segment("Pit Straight",        "straight", 600,  kmh_to_mps(160), kmh_to_mps(275)),
-        Segment("Sainte Devote Brake", "brake",    100,  kmh_to_mps(275), kmh_to_mps(70)),
-        Segment("Sainte Devote",       "corner",   100,  kmh_to_mps(70),  kmh_to_mps(90)),
-        Segment("Beau Rivage",         "corner",   300,  kmh_to_mps(130), kmh_to_mps(170)),
+        Segment("Sainte Devote Brake", "brake",    100,  kmh_to_mps(275), kmh_to_mps(80)),
+        Segment("Sainte Devote",       "corner",   100,  kmh_to_mps(80),  kmh_to_mps(110)),
+        Segment("Beau Rivage",         "corner",   300,  kmh_to_mps(145), kmh_to_mps(190)),
         Segment("Massenet Brake",      "brake",    80,   kmh_to_mps(220), kmh_to_mps(75)),
-        Segment("Casino Square",       "corner",   150,  kmh_to_mps(75),  kmh_to_mps(100)),
-        Segment("Mirabeau Brake",      "brake",    80,   kmh_to_mps(200), kmh_to_mps(60)),
-        Segment("Mirabeau Corner",     "corner",   120,  kmh_to_mps(60),  kmh_to_mps(90)),
-        Segment("Portier",             "corner",   150,  kmh_to_mps(120), kmh_to_mps(150)),
+        Segment("Casino Square",       "corner",   150,  kmh_to_mps(80),  kmh_to_mps(115)),
+        Segment("Mirabeau Brake",      "brake",    80,   kmh_to_mps(200), kmh_to_mps(65)),
+        Segment("Mirabeau Corner",     "corner",   120,  kmh_to_mps(65),  kmh_to_mps(100)),
+        Segment("Portier",             "corner",   150,  kmh_to_mps(130), kmh_to_mps(160)),
         Segment("Tunnel Straight",     "straight", 500,  kmh_to_mps(200), kmh_to_mps(275)),
         Segment("Nouvelle Chicane",    "brake",    100,  kmh_to_mps(275), kmh_to_mps(65)),
         Segment("Tabac",               "corner",   200,  kmh_to_mps(135), kmh_to_mps(165)),
-        Segment("Swimming Pool",       "corner",   300,  kmh_to_mps(125), kmh_to_mps(155)),
-        Segment("Rascasse Brake",      "brake",    80,   kmh_to_mps(200), kmh_to_mps(50)),
-        Segment("Rascasse Corner",     "corner",   200,  kmh_to_mps(50),  kmh_to_mps(100)),
+        Segment("Swimming Pool",       "corner",   300,  kmh_to_mps(140), kmh_to_mps(170)),
+        Segment("Rascasse Brake",      "brake",    80,   kmh_to_mps(200), kmh_to_mps(55)),
+        Segment("Rascasse Corner",     "corner",   200,  kmh_to_mps(70),  kmh_to_mps(120)),
         Segment("Anthony Noghes",      "corner",   160,  kmh_to_mps(100), kmh_to_mps(155)),
     ]
     return Track(segments)

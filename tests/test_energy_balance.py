@@ -2,9 +2,15 @@ import pytest
 from sim.battery import Battery
 from sim.track import Segment, Track
 from sim.vehicle import Vehicle
-from sim.controller import ConservativeController, AggressiveController, LookaheadController
+from sim.controller import (
+    BaselineController,
+    ConservativeController,
+    AggressiveController,
+    LookaheadController,
+    OptimalController,
+)
 from sim.sim_runner import SimulationRunner
-from sim.config import BATTERY_CAPACITY_J, VEHICLE_MASS_KG
+from sim.config import BATTERY_CAPACITY_J, ENERGY_PER_LAP_J, VEHICLE_MASS_KG
 from utils.units import kmh_to_mps
 
 
@@ -185,3 +191,85 @@ def test_more_energy_means_faster_lap():
     t_low = low_bat.run_lap()["lap_time_s"]
     t_high = high_bat.run_lap()["lap_time_s"]
     assert t_high <= t_low, "Higher SOC gives more deployable energy, so equal or faster lap"
+
+
+# ── BaselineController ────────────────────────────────────────────────────────
+
+def test_baseline_deploys_nothing(simple_track):
+    sim = SimulationRunner(simple_track, Vehicle(VEHICLE_MASS_KG),
+                           Battery(BATTERY_CAPACITY_J, soc=0.8),
+                           BaselineController())
+    r = sim.run_lap()
+    assert r["deployed_j"] == 0.0, "Baseline must never deploy energy"
+
+def test_baseline_improvement_is_zero(simple_track):
+    sim = SimulationRunner(simple_track, Vehicle(VEHICLE_MASS_KG),
+                           Battery(BATTERY_CAPACITY_J, soc=0.8),
+                           BaselineController())
+    r = sim.run_lap()
+    assert r["lap_time_improvement_s"] == pytest.approx(0.0, abs=1e-9)
+
+def test_baseline_is_slowest_on_monza():
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    baseline = SimulationRunner(track, vehicle,
+                                Battery(BATTERY_CAPACITY_J, soc=0.6),
+                                BaselineController())
+    optimal = SimulationRunner(track, vehicle,
+                               Battery(BATTERY_CAPACITY_J, soc=0.6),
+                               OptimalController(vehicle, track,
+                                                 Battery(BATTERY_CAPACITY_J, soc=0.6)))
+    t_base = baseline.run_lap()["lap_time_s"]
+    t_opt  = optimal.run_lap()["lap_time_s"]
+    assert t_opt < t_base, "Optimal must be faster than ERS-OFF baseline"
+
+
+# ── OptimalController ─────────────────────────────────────────────────────────
+
+def test_optimal_runs_and_returns_keys():
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    battery = Battery(BATTERY_CAPACITY_J, soc=0.6)
+    ctrl = OptimalController(vehicle, track, battery)
+    sim = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6), ctrl)
+    r = sim.run_lap()
+    for key in ["lap_time_s", "lap_time_improvement_s", "deployed_j", "soc_end"]:
+        assert key in r
+
+def test_optimal_respects_fia_cap():
+    """Optimal must not deploy more than the FIA 4 MJ/lap cap."""
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    battery = Battery(BATTERY_CAPACITY_J, soc=0.8)
+    ctrl = OptimalController(vehicle, track, battery)
+    sim = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.8), ctrl)
+    r = sim.run_lap()
+    assert r["deployed_j"] <= ENERGY_PER_LAP_J + 1e3, (
+        f"Optimal deployed {r['deployed_j']/1e6:.3f} MJ, exceeds FIA cap of {ENERGY_PER_LAP_J/1e6:.1f} MJ"
+    )
+
+def test_optimal_beats_aggressive_on_monza():
+    """Optimal (unconstrained timing) should match or beat fixed-budget Aggressive."""
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    battery = Battery(BATTERY_CAPACITY_J, soc=0.6)
+    opt_ctrl = OptimalController(vehicle, track, battery)
+    agg_ctrl = AggressiveController(energy_budget_j=4e6)
+    t_opt = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6), opt_ctrl).run_lap()["lap_time_s"]
+    t_agg = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6), agg_ctrl).run_lap()["lap_time_s"]
+    assert t_opt <= t_agg + 1e-6, f"Optimal ({t_opt:.4f}s) should not be slower than Aggressive ({t_agg:.4f}s)"
+
+def test_optimal_soc_stays_in_bounds():
+    from experiments.tracks import build_monza
+    from sim.config import SOC_MIN, SOC_MAX
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    battery = Battery(BATTERY_CAPACITY_J, soc=0.6)
+    ctrl = OptimalController(vehicle, track, battery)
+    sim = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6), ctrl)
+    r = sim.run_lap()
+    assert SOC_MIN <= r["soc_end"] <= SOC_MAX

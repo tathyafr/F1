@@ -4,7 +4,7 @@ from sim.track import Track
 from sim.vehicle import Vehicle
 from sim.battery import Battery
 from sim.controller import Controller
-from sim.config import DEFAULT_DT, DEFAULT_REGEN_EFFICIENCY, MGUK_POWER_LIMIT_W, ENERGY_TO_TIME_COEFF
+from sim.config import DEFAULT_DT, DEFAULT_REGEN_EFFICIENCY, MGUK_POWER_LIMIT_W, ENERGY_TO_TIME_COEFF, ENERGY_PER_LAP_J
 import math
 
 
@@ -36,6 +36,7 @@ class SimulationRunner:
 
         baseline_time = self.track.lap_base_time()
         total_time = 0.0
+        lap_deployed_j = 0.0  # FIA Article 5.2.3 hard cap: <= ENERGY_PER_LAP_J per lap
 
         power_history: List[float] = []
         time_history: List[float] = []
@@ -87,8 +88,12 @@ class SimulationRunner:
                 power = max(0.0, min(power, MGUK_POWER_LIMIT_W))
 
                 energy_request = power * step_dt
+                # FIA Article 5.2.3: hard cap on total MGU-K deployment per lap
+                fia_headroom = max(0.0, ENERGY_PER_LAP_J - lap_deployed_j)
+                energy_request = min(energy_request, fia_headroom)
                 actual_deployed = self.battery.deploy_energy(energy_request)
                 seg_deployed_j += actual_deployed
+                lap_deployed_j += actual_deployed
 
                 time_history.append(total_time + step * step_dt)
                 power_history.append(power)

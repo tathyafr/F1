@@ -21,6 +21,17 @@ class Controller(ABC):
         raise NotImplementedError
 
 
+class BaselineController(Controller):
+    """
+    ERS-OFF baseline: deploys zero power at all times.
+    Used as the reference point for all strategy comparisons.
+    Without this, improvements are relative to an undefined baseline.
+    """
+
+    def decide_power(self, state: Dict, dt: float, upcoming: Optional[List[Segment]] = None) -> float:
+        return 0.0
+
+
 class ConservativeController(Controller):
     """
     Deploy up to MGUK_POWER_LIMIT only if SOC is above a threshold.
@@ -139,12 +150,12 @@ class OptimalController(Controller):
 
         soc = battery_init_soc
         total_time = 0.0
+        total_deployed = 0.0
 
         for i, seg in enumerate(track.segments):
             avg_v = max(0.1, 0.5 * (seg.v_entry + seg.v_exit))
             seg_time = seg.length_m / avg_v
             n_steps = max(1, int(math.ceil(seg_time / dt)))
-            step_dt = seg_time / n_steps
 
             # regen
             if seg.v_entry > seg.v_exit:
@@ -161,6 +172,7 @@ class OptimalController(Controller):
             deployed = min(energy_request, available_j)
             soc -= deployed / battery_capacity_j
             soc = max(SOC_MIN, min(SOC_MAX, soc))
+            total_deployed += deployed
 
             # time savings: calibrated linear model, straights only (mirrors sim_runner logic)
             if seg.seg_type == "straight":
@@ -170,34 +182,45 @@ class OptimalController(Controller):
             effective_time = max(seg_time - time_saved, seg.length_m / 100.0)
             total_time += effective_time
 
-        return total_time, soc
+        return total_time, soc, total_deployed
 
     def _optimize(self, vehicle, track, battery, regen_efficiency, dt):
         import numpy as np
         from scipy.optimize import minimize
-        from sim.config import SOC_MIN
+        from sim.config import SOC_MIN, ENERGY_PER_LAP_J
 
         n = track.num_segments()
         x0 = np.ones(n) * 0.5
 
         def objective(x):
-            t, _ = self._simulate_lap_fast(
+            t, _, _ = self._simulate_lap_fast(
                 x, vehicle, track, battery.soc, battery.capacity_j, regen_efficiency, dt
             )
             return t
 
         def soc_constraint(x):
-            _, soc_end = self._simulate_lap_fast(
+            # SOC at end of lap must be >= SOC_MIN
+            _, soc_end, _ = self._simulate_lap_fast(
                 x, vehicle, track, battery.soc, battery.capacity_j, regen_efficiency, dt
             )
             return soc_end - SOC_MIN
+
+        def fia_energy_constraint(x):
+            # FIA Article 5.2.3: total MGU-K deployment <= 4 MJ per lap
+            _, _, deployed = self._simulate_lap_fast(
+                x, vehicle, track, battery.soc, battery.capacity_j, regen_efficiency, dt
+            )
+            return ENERGY_PER_LAP_J - deployed  # >= 0 means compliant
 
         result = minimize(
             objective,
             x0,
             method="SLSQP",
             bounds=[(0.0, 1.0)] * n,
-            constraints={"type": "ineq", "fun": soc_constraint},
+            constraints=[
+                {"type": "ineq", "fun": soc_constraint},
+                {"type": "ineq", "fun": fia_energy_constraint},
+            ],
             options={"maxiter": 300, "ftol": 1e-7},
         )
         return result.x.tolist()
