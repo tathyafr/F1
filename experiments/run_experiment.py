@@ -13,7 +13,7 @@ from sim.controller import (
     OptimalController,
 )
 from sim.sim_runner import SimulationRunner
-from sim.config import VEHICLE_MASS_KG, BATTERY_CAPACITY_J
+from sim.config import VEHICLE_MASS_KG, BATTERY_CAPACITY_J, ENERGY_PER_LAP_J
 
 os.makedirs("results", exist_ok=True)
 
@@ -125,5 +125,36 @@ def run():
     print("Saved → results/stint_results.csv")
 
 
+def run_cap_sensitivity():
+    """Sweep FIA deployment cap [2, 4, 6, 8] MJ for OptimalController across all 3 tracks."""
+    caps_j = [2e6, 4e6, 6e6, 8e6]
+    soc = 0.6
+    rows = []
+
+    print("\n=== FIA CAP SENSITIVITY (OptimalController, SOC=0.6) ===")
+    for track_name in TRACK_REGISTRY:
+        track = build_track(track_name)
+        vehicle = Vehicle(VEHICLE_MASS_KG)
+        for cap_j in caps_j:
+            battery_opt = Battery(BATTERY_CAPACITY_J, soc=soc)
+            opt = OptimalController(vehicle, track, battery_opt, energy_cap_j=cap_j)
+            battery_sim = Battery(BATTERY_CAPACITY_J, soc=soc)
+            sim = SimulationRunner(track, vehicle, battery_sim, opt, energy_cap_j=cap_j)
+            result = sim.run_lap()
+            rows.append({
+                "track": track_name,
+                "cap_mj": cap_j / 1e6,
+                "improvement_s": result["lap_time_improvement_s"],
+                "deployed_j": result["deployed_j"],
+            })
+            print(f"  {track_name:6s}  cap={cap_j/1e6:.0f}MJ  "
+                  f"+{result['lap_time_improvement_s']:.4f}s  "
+                  f"deployed={result['deployed_j']/1e6:.2f}MJ")
+
+    pd.DataFrame(rows).to_csv("results/cap_sensitivity.csv", index=False)
+    print("Saved → results/cap_sensitivity.csv")
+
+
 if __name__ == "__main__":
     run()
+    run_cap_sensitivity()

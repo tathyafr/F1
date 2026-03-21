@@ -220,6 +220,21 @@ A notable property of the Optimal solution is its invariance to initial SOC acro
 
 Monaco's lower ERS benefit (0.210 s optimal vs. 0.400 s at Monza) is consistent with its circuit architecture: only 14% of the lap is spent on straights versus 53% at Monza. This suggests that the absolute ERS benefit ceiling is determined more by circuit geometry than by strategy sophistication. On Monaco, even a perfect optimizer cannot extract more than ~0.21 s because the deployable straight distance is fundamentally limited. Strategy selection is therefore more impactful at power circuits (Monza, Spa) than at street circuits (Monaco).
 
+### 4.6 Regulatory Cap Sensitivity: When Do the Rules Stop Mattering?
+
+Sweeping the FIA deployment cap from 2 MJ to 8 MJ for the Optimal controller reveals a consistent pattern across all three circuits (Figure F):
+
+| Cap (MJ) | Monza improvement (s) | Spa improvement (s) | Monaco improvement (s) |
+|----------|----------------------|---------------------|------------------------|
+| 2        | 0.200                | 0.200               | 0.200                  |
+| 4        | 0.400                | 0.400               | 0.210                  |
+| 6        | 0.413                | 0.422               | 0.210                  |
+| 8        | 0.413                | 0.422               | 0.210                  |
+
+Three findings emerge. First, below 4 MJ the relationship is linear: each additional megajoule yields exactly 0.1 s improvement (for straights-only deployment), meaning the cap is the binding constraint. Above 4 MJ, returns diminish sharply — doubling the cap from 4 to 8 MJ yields only 0.013 s additional improvement at Monza and 0.022 s at Spa. Second, Monaco plateaus at the current 4 MJ cap: above 4 MJ, no further improvement is possible regardless of cap level, because the circuit has insufficient straight length to absorb additional deployment. The track architecture, not the regulation, becomes the binding constraint. Third, Spa has a higher ceiling than Monza (0.422 s vs. 0.413 s at 6 MJ) because it has more absolute straight length even though its straight *percentage* is lower.
+
+These results suggest that the FIA's 4 MJ cap is well-calibrated for street circuits like Monaco, where it coincides with the physical deployment ceiling. On power circuits, a modest cap increase to 5–6 MJ would yield measurable performance gains; beyond 6 MJ, diminishing returns make further cap increases largely ineffective.
+
 ---
 
 ## 5. Conclusions
@@ -231,6 +246,8 @@ Three explicit conclusions follow from the simulation results:
 **C2.** SOC-threshold controllers are systematically vulnerable to the Conservative paradox: they can deploy near-maximum energy budgets with zero lap time benefit if the deployment trigger fires during corner segments. Segment-type awareness is a necessary condition for effective ERS strategy.
 
 **C3.** Circuit architecture sets the absolute ceiling on ERS benefit. Tracks with higher straight-distance fractions (Monza 53%, Spa 43%) permit greater improvement than street circuits (Monaco 14%). Strategy optimization is therefore more valuable at power circuits than at tight street circuits.
+
+**C4.** The FIA 4 MJ/lap cap is the binding constraint at street circuits but not at power circuits. Relaxing the cap to 6 MJ would yield approximately 0.013–0.022 s additional improvement at Monza and Spa; beyond 6 MJ, diminishing returns make further increases practically ineffective. On Monaco, raising the cap above 4 MJ provides zero benefit — the track architecture is the constraint, not the regulation.
 
 ---
 
@@ -273,6 +290,7 @@ The most significant limitation is the linear time savings model. Real ERS deplo
 | C | `results/fig_c_tornado.png` | Tornado chart: OAT sensitivity — parameter impact range by strategy |
 | D | `results/fig_d_pareto.png` | Pareto frontier: lap time improvement vs. SOC remaining at lap end |
 | E | `results/fig_e_stint.png` | Multi-lap stint: SOC depletion and lap time degradation over 5 laps (Monza, SOC=0.8) |
+| F | `results/fig_f_cap_sensitivity.png` | Cap sensitivity: Optimal improvement vs. FIA deployment cap (2–8 MJ) across all 3 circuits |
 
 ---
 

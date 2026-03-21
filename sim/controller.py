@@ -135,9 +135,11 @@ class OptimalController(Controller):
         battery: Battery,
         regen_efficiency: float = 0.6,
         dt: float = 0.2,
+        energy_cap_j: float = None,
     ):
-        from sim.config import SOC_MIN
+        from sim.config import SOC_MIN, ENERGY_PER_LAP_J
         self._SOC_MIN = SOC_MIN
+        self._energy_cap_j = energy_cap_j if energy_cap_j is not None else ENERGY_PER_LAP_J
         self._seg_index = 0
         self._current_seg_name = None
         self._schedule = self._optimize(vehicle, track, battery, regen_efficiency, dt)
@@ -187,7 +189,7 @@ class OptimalController(Controller):
     def _optimize(self, vehicle, track, battery, regen_efficiency, dt):
         import numpy as np
         from scipy.optimize import minimize
-        from sim.config import SOC_MIN, ENERGY_PER_LAP_J
+        from sim.config import SOC_MIN
 
         n = track.num_segments()
         x0 = np.ones(n) * 0.5
@@ -205,12 +207,14 @@ class OptimalController(Controller):
             )
             return soc_end - SOC_MIN
 
+        energy_cap_j = self._energy_cap_j
+
         def fia_energy_constraint(x):
-            # FIA Article 5.2.3: total MGU-K deployment <= 4 MJ per lap
+            # FIA deployment cap per lap (<= energy_cap_j)
             _, _, deployed = self._simulate_lap_fast(
                 x, vehicle, track, battery.soc, battery.capacity_j, regen_efficiency, dt
             )
-            return ENERGY_PER_LAP_J - deployed  # >= 0 means compliant
+            return energy_cap_j - deployed  # >= 0 means compliant
 
         result = minimize(
             objective,
