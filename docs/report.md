@@ -1,8 +1,8 @@
 # ERS Deployment Strategy in Formula 1: Does Timing Matter More Than Total Energy?
 
-**Author:** [Your Name]
+**Author:** tathyafr
 **Date:** 2026
-**Repository:** github.com/[username]/F1
+**Repository:** https://github.com/tathyafr/F1
 
 ---
 
@@ -24,7 +24,7 @@
 
 ## Abstract
 
-Formula 1's Energy Recovery System (ERS) allows teams to harvest kinetic energy under braking and redeploy it via the MGU-K motor-generator unit, subject to a 4 MJ per lap FIA regulatory cap. This paper investigates whether the *timing* of deployment is more important than the *total energy* deployed, using a discrete-time lap simulation across three circuits (Monza, Spa-Francorchamps, Monaco) and five deployment strategies (ERS-OFF baseline, Conservative, Aggressive, Lookahead, and Optimal). The simulator enforces FIA energy constraints at the hardware level and is validated against published 2023 race pace data (lap time error < 2% for all three circuits). Results show that an offline-optimized strategy (SLSQP) consistently achieves 0.40 s improvement at Monza by concentrating all 4 MJ on three straights, while a conservative threshold-based strategy deploys 3.83 MJ with zero improvement by directing energy exclusively to corners. This confirms H1 and H2: deployment timing dominates total energy as a determinant of lap time benefit. Track architecture moderates the effect (Monaco: 0.21 s vs. Monza: 0.40 s), confirming H3.
+Formula 1's Energy Recovery System (ERS) allows teams to harvest kinetic energy under braking and redeploy it via the MGU-K motor-generator unit, subject to a 4 MJ per lap FIA regulatory cap. This paper investigates whether the *timing* of deployment is more important than the *total energy* deployed, using a discrete-time lap simulation across three circuits (Monza, Spa-Francorchamps, Monaco) and five deployment strategies (ERS-OFF baseline, Conservative, Aggressive, Lookahead, and Optimal). The simulator enforces the 2014–2025 FIA energy limits at every timestep, and its baseline lap times are within 2% of 2023 reference laps on all three circuits. Results show that an offline-optimized strategy (SLSQP) consistently achieves 0.40 s improvement at Monza by concentrating all 4 MJ on three straights, while a conservative threshold-based strategy deploys 3.83 MJ with zero improvement by directing energy exclusively to corners. This confirms H1 and H2: deployment timing dominates total energy as a determinant of lap time benefit. Track architecture moderates the effect (Monaco: 0.21 s vs. Monza: 0.40 s), confirming H3. Because the main model assumes corner deployment is worthless, that assumption was also stress-tested: Optimal stays the best strategy however much corners are worth, but its advantage over Aggressive shrinks from 2.8× to about 1.2× as corners approach the value of straights.
 
 ---
 
@@ -43,6 +43,8 @@ This project asks a sharper version of that question: given the same 4 MJ budget
 ### 1.3 Scope
 
 This study uses a physics-informed, segment-based discrete-time simulation. The model captures energy harvesting, battery state-of-charge dynamics, and FIA regulatory constraints. It does not model tire degradation, fuel mass reduction, or car-following effects. Results are therefore valid for strategy *comparison* on a single lap, not for absolute race simulation.
+
+**Regulatory era.** The model uses the 2014–2025 power-unit rules (MGU-K limited to 120 kW and 4 MJ deployed per lap). The 2026 rules raise the MGU-K to 350 kW, remove the MGU-H and roughly double per-lap harvesting. I deliberately stayed with the earlier rules because they were stable for over a decade and have complete data, whereas the 2026 season was still in progress when this was written. Re-running the study with 2026 parameters is the natural next step (Section 7).
 
 ---
 
@@ -88,7 +90,7 @@ Three circuits were modelled with distinct architectural characteristics:
 
 Straight percentage was computed as (total straight length) / (total track length). Monza has the highest straight fraction; Monaco the lowest. This architectural difference is the primary driver of H3.
 
-Baseline lap times were validated against 2023 F1 season race pace data. All errors are within ±2% and are conservative (simulated car slightly slower than real pace due to simplified velocity profiles).
+Baseline lap times were checked against 2023 reference lap times. All errors are within ±2%, with the simulated car slightly slower than reality due to simplified velocity profiles. Note that this is a calibration check rather than independent validation: segment speeds were entered by hand (and Monaco's were adjusted to fit), so a close match is expected. The strategy comparison depends far more on the energy-to-time model (Section 2.4) than on the absolute lap time.
 
 ### 2.4 Lap Time Model
 
@@ -100,7 +102,9 @@ The time saving on a straight is modelled as:
 Δt = E_deployed × k
 ```
 
-where `k = 1×10⁻⁷ s/J` (0.1 s per MJ). This coefficient was calibrated against published F1 data: at Monza, full ERS deployment (~4 MJ) yields approximately 0.4 s per lap. The linear model is validated to within the precision of available reference data.
+where `k = 1×10⁻⁷ s/J` (0.1 s per MJ). This coefficient was set so that full ERS deployment (~4 MJ) at Monza is worth about 0.4 s per lap, in line with published estimates of ~0.3–0.5 s.
+
+**Important consequence.** Because the benefit is linear and zero outside straights, the best possible result is fixed by the model: 4 MJ × 0.1 s/MJ = 0.40 s. Optimal reaching 0.40 s means it found a schedule that puts all 4 MJ on straights; the number itself is an input, not a discovery. The zero-corner-benefit assumption is the one that drives H1 and H2, so Section 4.7 relaxes it and checks whether the conclusions survive.
 
 A physical minimum segment time is enforced (segment length / 100 m/s ≈ 360 km/h) to prevent unphysical results at extreme energy inputs.
 
@@ -202,7 +206,7 @@ This result is physically grounded. ERS time savings arise only on straights, wh
 
 ### 4.2 The Conservative Paradox
 
-The Conservative controller's behavior at SOC=0.6 on Monza appears counterintuitive: it deploys more energy than the Lookahead controller (3.83 MJ vs. 4.00 MJ) but achieves zero improvement versus Lookahead's 0.083 s gain. The explanation is the SOC threshold mechanism. At SOC=0.6, the battery fills up during braking zones (regen pushes SOC above the 0.6 threshold), triggering deployment in the *subsequent corner segment* — exactly where time savings are zero. The controller deploys energy energetically but ineffectively.
+The Conservative controller's behavior at SOC=0.6 on Monza appears counterintuitive: it deploys almost as much energy as the Lookahead controller (3.83 MJ vs. 4.00 MJ) but achieves zero improvement versus Lookahead's 0.083 s gain. The explanation is the SOC threshold mechanism. At SOC=0.6, the battery fills up during braking zones (regen pushes SOC above the 0.6 threshold), triggering deployment in the *subsequent corner segment* — exactly where time savings are zero. The controller deploys energy energetically but ineffectively.
 
 This is not a bug in the simulation; it represents a real failure mode in simplistic ERS control logic. A production ERS controller that triggers purely on SOC without segment-type awareness would exhibit this behavior.
 
@@ -210,7 +214,7 @@ This is not a bug in the simulation; it represents a real failure mode in simpli
 
 At Monza (SOC=0.6), Optimal and Aggressive both deploy exactly 4 MJ. Optimal achieves 0.400 s; Aggressive 0.144 s. This 2.8× difference is the clearest quantification of the timing effect in this study. The Aggressive controller distributes energy throughout the lap (deploys immediately at full power until the budget is exhausted), hitting both straights and corners. The Optimal controller concentrates all 4 MJ on the three Monza straights — Main Straight (900 m), Serraglio (800 m), and Back Straight (900 m).
 
-This result validates the real-world practice of pre-race ERS map optimization. Teams that invest in offline optimization can extract up to 2.8× more lap time benefit from the same regulatory energy budget as teams using simpler deployment heuristics.
+This is consistent with the real-world practice of pre-race ERS map optimization. Within this model, offline optimization extracts up to 2.8× more lap time from the same energy budget than an indiscriminate heuristic, though Section 4.7 shows the size of that gap depends strongly on how much corner deployment is assumed to be worth.
 
 ### 4.4 Optimal's SOC Independence
 
@@ -222,7 +226,7 @@ Monaco's lower ERS benefit (0.210 s optimal vs. 0.400 s at Monza) is consistent 
 
 ### 4.6 Regulatory Cap Sensitivity: When Do the Rules Stop Mattering?
 
-Sweeping the FIA deployment cap from 2 MJ to 8 MJ for the Optimal controller reveals a consistent pattern across all three circuits (Figure F):
+This section asks how results change if the 2014–2025 deployment cap had been different. Sweeping the FIA deployment cap from 2 MJ to 8 MJ for the Optimal controller reveals a consistent pattern across all three circuits (Figure F):
 
 | Cap (MJ) | Monza improvement (s) | Spa improvement (s) | Monaco improvement (s) |
 |----------|----------------------|---------------------|------------------------|
@@ -233,7 +237,20 @@ Sweeping the FIA deployment cap from 2 MJ to 8 MJ for the Optimal controller rev
 
 Three findings emerge. First, below 4 MJ the relationship is linear: each additional megajoule yields exactly 0.1 s improvement (for straights-only deployment), meaning the cap is the binding constraint. Above 4 MJ, returns diminish sharply — doubling the cap from 4 to 8 MJ yields only 0.013 s additional improvement at Monza and 0.022 s at Spa. Second, Monaco plateaus at the current 4 MJ cap: above 4 MJ, no further improvement is possible regardless of cap level, because the circuit has insufficient straight length to absorb additional deployment. The track architecture, not the regulation, becomes the binding constraint. Third, Spa has a higher ceiling than Monza (0.422 s vs. 0.413 s at 6 MJ) because it has more absolute straight length even though its straight *percentage* is lower.
 
-These results suggest that the FIA's 4 MJ cap is well-calibrated for street circuits like Monaco, where it coincides with the physical deployment ceiling. On power circuits, a modest cap increase to 5–6 MJ would yield measurable performance gains; beyond 6 MJ, diminishing returns make further cap increases largely ineffective.
+Within this model, the old 4 MJ cap roughly coincided with Monaco's physical deployment ceiling, while power circuits had a little unused headroom above it; beyond about 6 MJ, extra allowance bought almost nothing because the 120 kW power limit and straight length become the constraints. This is relevant context for 2026, which raised both the power limit (350 kW) and the per-lap energy: with a higher power limit, the same straights can absorb far more energy, so the plateau seen here would move. Testing that is left to future work.
+
+### 4.7 Stress-Testing the Corner Assumption
+
+The main model gives corner deployment zero benefit, which makes H1 and H2 partly true by construction. To test how much the conclusions depend on it, energy deployed in a corner was given a fraction *f* of its straight-line value, and every strategy (including a re-optimized Optimal controller) was re-run for *f* = 0 to 1 (`experiments/corner_benefit_sensitivity.py`, SOC = 0.6).
+
+| *f* (corner value vs. straight) | Monza: Optimal | Monza: Aggressive | Monza: Conservative | Optimal ÷ Aggressive (Monza / Spa / Monaco) |
+|------|------|------|------|------|
+| 0.00 | 0.400 s | 0.144 s | 0.000 s | 2.8× / 2.3× / 1.8× |
+| 0.25 | 0.400 s | 0.193 s | 0.081 s | 2.1× / 1.8× / 1.5× |
+| 0.50 | 0.400 s | 0.242 s | 0.161 s | 1.7× / 1.5× / 1.4× |
+| 1.00 | 0.400 s | 0.340 s | 0.322 s | 1.2× / 1.1× / 1.2× |
+
+Three things follow. First, the **ranking is robust**: Optimal is the fastest strategy at every value of *f* on every circuit, so "where you deploy matters" holds even if corners are worth as much as straights (some energy is still wasted in braking zones, and Optimal avoids that). Second, the **size of the effect is not robust**: the 2.8× headline only holds when corners are worth nothing, and it falls to about 2× for a plausible *f* ≈ 0.25. Third, the **Conservative paradox depends on the assumption**: with any corner value, Conservative gains time, so "zero benefit from 3.83 MJ" should be read as the extreme case. The honest summary of H1 is therefore: timing reliably matters, and how much it matters depends on how grip-limited the circuit's corners are.
 
 ---
 
@@ -241,13 +258,13 @@ These results suggest that the FIA's 4 MJ cap is well-calibrated for street circ
 
 Three explicit conclusions follow from the simulation results:
 
-**C1.** Deployment timing is the primary determinant of ERS lap time benefit. An offline-optimized strategy extracting 0.400 s from 4 MJ of deployment at Monza outperforms an indiscriminate strategy extracting 0.144 s from the same energy — a 2.8× improvement attributable solely to concentrating deployment on straights.
+**C1.** Deployment timing is a major determinant of ERS lap time benefit. With corner deployment treated as worthless, an offline-optimized strategy extracts 0.400 s from 4 MJ at Monza versus 0.144 s for an indiscriminate strategy using the same energy (2.8×). Optimal remains best under every corner assumption tested, but the advantage narrows to about 1.2× if corners are worth as much as straights (Section 4.7).
 
-**C2.** SOC-threshold controllers are systematically vulnerable to the Conservative paradox: they can deploy near-maximum energy budgets with zero lap time benefit if the deployment trigger fires during corner segments. Segment-type awareness is a necessary condition for effective ERS strategy.
+**C2.** SOC-threshold controllers can deploy near-maximum energy budgets for little or no lap time benefit if the deployment trigger fires during corner segments. Segment-type awareness is important for effective ERS strategy.
 
 **C3.** Circuit architecture sets the absolute ceiling on ERS benefit. Tracks with higher straight-distance fractions (Monza 53%, Spa 43%) permit greater improvement than street circuits (Monaco 14%). Strategy optimization is therefore more valuable at power circuits than at tight street circuits.
 
-**C4.** The FIA 4 MJ/lap cap is the binding constraint at street circuits but not at power circuits. Relaxing the cap to 6 MJ would yield approximately 0.013–0.022 s additional improvement at Monza and Spa; beyond 6 MJ, diminishing returns make further increases practically ineffective. On Monaco, raising the cap above 4 MJ provides zero benefit — the track architecture is the constraint, not the regulation.
+**C4.** Under the 2014–2025 rules, the 4 MJ/lap cap was close to the physical limit at a street circuit (Monaco) and left only small headroom at power circuits: raising it to 6 MJ adds just 0.013–0.022 s at Monza and Spa in this model, and nothing at Monaco.
 
 ---
 
@@ -258,21 +275,32 @@ The following limitations should be considered before generalizing these results
 | Limitation | Impact | Severity |
 |-----------|--------|---------|
 | Linear ERS time model (k = 1×10⁻⁷ s/J) | Assumes constant marginal benefit; diminishing returns at high deployment rates not captured | Medium |
-| Straights-only time savings | Slightly pessimistic for medium-speed curves where power can assist (e.g., Spa's Eau Rouge) | Low |
+| Straights-only time savings | Drives the size of the H1/H2 effects; tested in Section 4.7 (ranking holds, magnitude shrinks) | Medium |
 | No tire degradation | Stint analysis reflects battery effects only; real stint performance declines faster | Medium |
 | No fuel mass reduction | Car gets ~30 kg lighter over a race; lap time improves 0.03–0.04 s/lap from this alone | Low |
 | Trapezoidal velocity profile | Linear speed interpolation within segments; underestimates speed at segment transitions | Low |
 | LookaheadController heuristic mismatch | Uses legacy physics estimate for time benefit, not calibrated linear model | Low |
 | Single-car model | No car-following, DRS, or traffic effects | Low |
 | Battery capacity assumed fixed | Real battery capacity degrades with temperature and cycling | Low |
+| No separate MGU-K harvest limit | 2014–2025 rules capped MGU-K harvesting at 2 MJ/lap; the model does not enforce this | Low–Medium |
+| 2014–2025 rules only | Does not represent the 2026 power units (350 kW MGU-K, no MGU-H) | Scope |
 
-The most significant limitation is the linear time savings model. Real ERS deployment exhibits some saturation at very high deployment rates, meaning the Optimal strategy's 0.400 s figure may be slightly optimistic. However, because this model is applied *consistently* to all strategies, the relative comparisons (Optimal vs. Aggressive vs. Conservative) remain valid.
+The most significant limitation is the linear time savings model. Real ERS deployment exhibits some saturation at very high deployment rates, meaning the Optimal strategy's 0.400 s figure may be slightly optimistic. Applying it consistently to all strategies keeps the *ranking* meaningful, but as Section 4.7 shows, the *size* of the differences between strategies depends heavily on the corner assumption.
+
+---
+
+## 7. Future Work
+
+1. **2026 regulations.** Re-run with a 350 kW MGU-K and the new per-lap energy limits once a full season of data is available, and compare how much deployment timing matters in each era.
+2. **Physics-based time model.** Replace the linear coefficient with the speed-dependent drag model already in `sim/vehicle.py`, so the benefit of energy varies with speed instead of being assumed.
+3. **Harvest limit.** Enforce the MGU-K harvest cap separately from deployment.
+4. **Real telemetry.** Build segment speeds from public telemetry (e.g. the FastF1 library) instead of entering them by hand.
 
 ---
 
 ## References
 
-1. FIA Formula One Technical Regulations, Article 5.2 (Energy Store and MGUK), 2023.
+1. FIA Formula One Technical Regulations, Article 5.2 (Energy Store and MGUK), 2023 (power-unit rules unchanged in this respect from 2014 to 2025).
 2. Perez, L.J. et al. "Energy management strategies for hybrid Formula 1 powertrains." *Proceedings of the Institution of Mechanical Engineers, Part D*, 2017.
 3. Formula 1 official timing data, Autodromo Nazionale Monza, Italian Grand Prix 2023.
 4. Formula 1 official timing data, Circuit de Spa-Francorchamps, Belgian Grand Prix 2023.
@@ -292,6 +320,8 @@ The most significant limitation is the linear time savings model. Real ERS deplo
 | E | `results/fig_e_stint.png` | Multi-lap stint: SOC depletion and lap time degradation over 5 laps (Monza, SOC=0.8) |
 | F | `results/fig_f_cap_sensitivity.png` | Cap sensitivity: Optimal improvement vs. FIA deployment cap (2–8 MJ) across all 3 circuits |
 
+The corner-benefit sweep (Section 4.7) is saved as `results/corner_benefit_sensitivity.csv`.
+
 ---
 
 ## Appendix B: Reproducing Results
@@ -300,8 +330,9 @@ See `docs/reproducibility.md` for complete instructions. Summary:
 
 ```bash
 pip install -r requirements.txt          # install dependencies
-pytest tests/ -v                          # 29 tests, all pass
+pytest tests/ -v                          # 35 tests, all pass
 python -m experiments.sanity_check       # 5 invariants, all pass
 python -m experiments.run_experiment     # regenerate all CSVs
+python -m experiments.corner_benefit_sensitivity  # Section 4.7
 # Open analysis/F1_analysis.ipynb and run all cells to regenerate figures
 ```

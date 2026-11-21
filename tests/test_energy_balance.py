@@ -273,3 +273,42 @@ def test_optimal_soc_stays_in_bounds():
     sim = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6), ctrl)
     r = sim.run_lap()
     assert SOC_MIN <= r["soc_end"] <= SOC_MAX
+
+# ── Corner-benefit assumption ────────────────────────────────────────────────
+
+def test_corner_benefit_default_matches_original_model():
+    """corner_benefit_fraction=0 must reproduce the original results exactly."""
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    a = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6),
+                         ConservativeController()).run_lap()
+    b = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6),
+                         ConservativeController(), corner_benefit_fraction=0.0).run_lap()
+    assert a["lap_time_s"] == b["lap_time_s"]
+
+def test_corner_benefit_helps_corner_deployment():
+    """If corners have some value, Conservative (which deploys in corners) gains time."""
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    r0 = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6),
+                          ConservativeController(), corner_benefit_fraction=0.0).run_lap()
+    r5 = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6),
+                          ConservativeController(), corner_benefit_fraction=0.5).run_lap()
+    assert r5["lap_time_improvement_s"] > r0["lap_time_improvement_s"]
+
+@pytest.mark.parametrize("f", [0.0, 0.25, 0.5, 1.0])
+def test_optimal_beats_aggressive_for_any_corner_benefit(f):
+    """The ranking Optimal >= Aggressive should not depend on the corner assumption."""
+    from experiments.tracks import build_monza
+    track = build_monza()
+    vehicle = Vehicle(VEHICLE_MASS_KG)
+    opt = OptimalController(vehicle, track, Battery(BATTERY_CAPACITY_J, soc=0.6),
+                            corner_benefit_fraction=f)
+    t_opt = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6), opt,
+                             corner_benefit_fraction=f).run_lap()["lap_time_s"]
+    t_agg = SimulationRunner(track, vehicle, Battery(BATTERY_CAPACITY_J, soc=0.6),
+                             AggressiveController(energy_budget_j=4e6),
+                             corner_benefit_fraction=f).run_lap()["lap_time_s"]
+    assert t_opt <= t_agg + 1e-6

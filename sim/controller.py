@@ -136,8 +136,10 @@ class OptimalController(Controller):
         regen_efficiency: float = 0.6,
         dt: float = 0.2,
         energy_cap_j: float = None,
+        corner_benefit_fraction: float = 0.0,
     ):
         from sim.config import SOC_MIN, ENERGY_PER_LAP_J
+        self._corner_benefit_fraction = corner_benefit_fraction
         self._SOC_MIN = SOC_MIN
         self._energy_cap_j = energy_cap_j if energy_cap_j is not None else ENERGY_PER_LAP_J
         self._seg_index = 0
@@ -179,6 +181,8 @@ class OptimalController(Controller):
             # time savings: calibrated linear model, straights only (mirrors sim_runner logic)
             if seg.seg_type == "straight":
                 time_saved = deployed * ENERGY_TO_TIME_COEFF
+            elif seg.seg_type == "corner":
+                time_saved = deployed * ENERGY_TO_TIME_COEFF * self._corner_benefit_fraction
             else:
                 time_saved = 0.0
             effective_time = max(seg_time - time_saved, seg.length_m / 100.0)
