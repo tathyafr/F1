@@ -19,6 +19,7 @@ class SimulationRunner:
         dt: float = DEFAULT_DT,
         regen_efficiency: float = DEFAULT_REGEN_EFFICIENCY,
         energy_cap_j: float = _DEFAULT_ENERGY_CAP_J,
+        corner_benefit_fraction: float = 0.0,
     ):
         self.track = track
         self.vehicle = vehicle
@@ -27,12 +28,17 @@ class SimulationRunner:
         self.dt = dt
         self.regen_efficiency = regen_efficiency
         self.energy_cap_j = energy_cap_j
+        # Fraction of the straight-line time benefit that energy deployed in a
+        # corner is assumed to give. 0.0 = the main model's assumption (corners
+        # are grip-limited, so extra power is useless). Swept in
+        # experiments/corner_benefit_sensitivity.py to test that assumption.
+        self.corner_benefit_fraction = corner_benefit_fraction
 
     def run_lap(self) -> Dict:
 
         self.battery.reset_history()
 
-        # Bug fix 2: reset AggressiveController budget at the start of each lap
+        # Reset per-lap controller state (e.g. the Aggressive budget)
         if hasattr(self.controller, "start_lap"):
             self.controller.start_lap()
 
@@ -64,7 +70,7 @@ class SimulationRunner:
                 e_rec = self.regen_efficiency * e_brake
                 self.battery.add_energy(e_rec)
 
-            # Bug fix 1: pass upcoming segments so LookaheadController can use them
+            # Upcoming segments are passed so the Lookahead controller can plan ahead
             upcoming = self.track.segments[seg_idx + 1:]
 
             seg_deployed_j = 0.0
@@ -111,7 +117,9 @@ class SimulationRunner:
             # Applied only on straights: corners are lateral-grip-limited, not power-limited.
             if seg.seg_type == "straight":
                 time_saved = seg_deployed_j * ENERGY_TO_TIME_COEFF
-            else:
+            elif seg.seg_type == "corner":
+                time_saved = seg_deployed_j * ENERGY_TO_TIME_COEFF * self.corner_benefit_fraction
+            else:  # braking zones: deploying while braking gives no benefit
                 time_saved = 0.0
             effective_seg_time = max(seg_time - time_saved, seg.length_m / 100.0)  # 100 m/s ~360 km/h physical cap
             total_time += effective_seg_time

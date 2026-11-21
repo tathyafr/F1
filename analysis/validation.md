@@ -1,10 +1,10 @@
 # Model Validation
 
-## 1. Lap Time Accuracy
+## 1. Lap Time Calibration Check
 
-Comparison of simulated baseline lap times vs. 2023 F1 race pace:
+Comparison of simulated baseline lap times vs. 2023 reference laps. Because segment speeds were entered by hand (and Monaco's were adjusted to fit), this is a calibration check, not independent validation:
 
-| Circuit | Simulated (s) | Real race pace (s) | Δ (s) | % Error |
+| Circuit | Simulated (s) | 2023 reference (s) | Δ (s) | % Error |
 |---------|--------------|-------------------|-------|---------|
 | Monza   | 81.72        | 80.3 (2023 race)  | +1.42 | +1.8%   |
 | Spa     | 108.60       | 106.8 (2023 race) | +1.80 | +1.7%   |
@@ -20,7 +20,7 @@ All three circuits are within ±2%. Errors are conservative — the simulated ca
 
 ## 2. ERS Energy Compliance
 
-FIA 2023 Technical Regulations, Article 5.2.3: maximum 4.0 MJ per lap from MGU-K.
+FIA 2023 Technical Regulations, Article 5.2.3: maximum 4.0 MJ per lap from MGU-K (the limit in force from 2014 to 2025; the 2026 rules change the power unit substantially and are out of scope).
 
 The FIA cap is enforced as a **hardware-level hard limit** in `sim_runner.py`. At each timestep, a running total `lap_deployed_j` is maintained; any deployment request that would exceed 4 MJ is clipped to the remaining headroom. This applies to every controller unconditionally.
 
@@ -51,11 +51,11 @@ The model applies savings **only on straight-line segments**, reflecting that co
 |-----------|----------------|----------|
 | Linear energy-to-time coefficient | If ERS benefit is non-linear, high-speed straights may be slightly overvalued | Medium |
 | Trapezoidal velocity profiles | Underestimates lap time by ~1.7–1.8% at all circuits | Low–Medium |
-| Straights-only time savings | If medium-speed corners have partial ERS benefit, Conservative is slightly underrated | Low |
+| Straights-only time savings | Sets the size of the timing effect. Tested in `experiments/corner_benefit_sensitivity.py`: Optimal stays best for any corner value, but its lead over Aggressive falls from 2.8× to ~1.2× | Medium |
 | No MGU-K harvest cap (2 MJ/lap) | Overestimates regen slightly at high-regen circuits (Spa) | Low |
 | No tire/fuel model | No lap-time degradation over stint beyond ERS depletion | Low |
 | Single-car model (no traffic) | Race strategy interaction not captured | Out of scope |
 
 ## 5. Conclusion on Validity
 
-The model is valid for its stated purpose: **comparative evaluation of ERS deployment strategies on a single lap**. All three circuits have baseline lap time error within ±2%. The relative ordering of strategies (Optimal > Aggressive > Lookahead > Conservative at typical SOC conditions) is physically defensible and confirmed by the programmatic sanity check. All results are reproducible via `python -m experiments.sanity_check`.
+The model is suitable for its stated purpose: **comparative evaluation of ERS deployment strategies on a single lap**. All three circuits have baseline lap time error within ±2%. The relative ordering of strategies (Optimal > Aggressive > Lookahead > Conservative at typical SOC conditions) is physically defensible and confirmed by the programmatic sanity check. All results are reproducible via `python -m experiments.sanity_check`.

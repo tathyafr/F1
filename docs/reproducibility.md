@@ -30,13 +30,13 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-Expected: **29 tests pass** in < 5 seconds.
+Expected: **35 tests pass** in < 5 seconds.
 
 Key invariants verified by the test suite:
 - SOC never leaves `[SOC_MIN, SOC_MAX]` during any simulation
 - Baseline (ERS-OFF) always produces zero improvement
 - Optimal never violates the FIA 4 MJ/lap cap
-- Optimal is always equal or faster than Aggressive
+- Optimal is always equal or faster than Aggressive (including when corners are given partial ERS value)
 
 ---
 
@@ -87,13 +87,23 @@ Outputs:
 
 ---
 
+## Step 4b — Stress-test the corner assumption
+
+```bash
+python -m experiments.corner_benefit_sensitivity
+```
+
+Re-runs all strategies on all tracks with corner deployment worth 0–100% of straight-line deployment. Output: `results/corner_benefit_sensitivity.csv` (see report Section 4.7).
+
+---
+
 ## Step 5 — Regenerate all figures
 
 Open and run `analysis/F1_analysis.ipynb` from top to bottom.
 
 Each cell is self-contained. The notebook:
 1. Calls `run_experiment.run()` to regenerate CSVs (Steps 3)
-2. Produces 5 publication-quality figures saved to `results/`:
+2. Produces 5 figures saved to `results/`:
 
 | Figure | File | Description |
 |--------|------|-------------|
@@ -125,7 +135,7 @@ All constants are defined in `sim/config.py`. Changing any value here propagates
 
 ## Track baselines vs. real lap times
 
-| Track | Simulated baseline | Real race pace | Error |
+| Track | Simulated baseline | 2023 reference lap | Error |
 |-------|--------------------|----------------|-------|
 | Monza | 81.72 s | 80.3 s (2023) | 1.8% |
 | Spa | 108.60 s | 106.8 s (2023) | 1.7% |
@@ -138,6 +148,6 @@ Errors arise from the trapezoidal velocity profile approximation (no traction ci
 ## Known limitations
 
 - **Linear ERS time model**: assumes every joule deployed on a straight saves exactly 1e-7 s. In reality, diminishing returns apply at high deployment rates.
-- **Corner deployment**: corners receive zero time benefit from ERS (grip-limited). This is physically correct for slow corners but slightly pessimistic for medium-speed arcs where power is partially beneficial.
+- **Corner deployment**: corners receive zero time benefit from ERS in the main model. This assumption drives the size of the headline result, so it is tested separately (Step 4b).
 - **Single lap**: no tire degradation, fuel mass, or traffic modeled. Stint results show the battery effect only.
 - **LookaheadController**: the greedy heuristic uses a simplified time-benefit estimate (`vehicle.estimate_time_saved_by_energy`), not the calibrated linear model. Results are directionally correct but not optimal.
